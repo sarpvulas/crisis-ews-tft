@@ -1,0 +1,25 @@
+# GPU override for the reproducibility stack.
+#
+# Layer on top of docker-compose.yml to build a CUDA image and reserve an
+# NVIDIA GPU for the train service. Requires the NVIDIA Container Toolkit
+# (Linux) or Docker Desktop + WSL2 with GPU support (Windows).
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml build train
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml \
+#     run --rm train --model ra-tft --task B \
+#     --data-dir data/shared/processed/taskb_spx_bbg_onset_trough \
+#     --results-dir results --device cuda --epochs 40
+
+services:
+  train:
+    build:
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cu121
+    image: ra-tft-train:cu121
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]

@@ -1,0 +1,6 @@
+# Data pipeline dependencies
+-r base.txt
+fredapi>=0.5
+yfinance>=0.2.31
+requests>=2.31
+openpyxl>=3.1

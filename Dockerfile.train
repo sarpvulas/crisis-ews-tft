@@ -1,0 +1,54 @@
+# syntax=docker/dockerfile:1
+#
+# Reproducibility image for the RA-TFT crisis-EWS thesis.
+#
+# Runs scripts/run_experiment.py for any registered model
+# (xgboost, lstm, ra-tft, tdt, tft, itransformer, ...) against a dataset that
+# is mounted at runtime via --data-dir. CPU-only by default so it builds and
+# runs on any machine; pass a CUDA wheel index to build a GPU image.
+#
+# Python 3.11 matches the KCL CREATE cluster (module python/3.11.6).
+#
+#   CPU build (default):   docker build -f Dockerfile.train -t ra-tft-train:cpu .
+#   GPU build (NVIDIA):    docker build -f Dockerfile.train \
+#                            --build-arg TORCH_INDEX_URL=https://download.pytorch.org/whl/cu121 \
+#                            -t ra-tft-train:cu121 .
+
+FROM python:3.11-slim
+
+# Torch wheel index — switch to .../whl/cu121 for an NVIDIA GPU image.
+ARG TORCH_INDEX_URL=https://download.pytorch.org/whl/cpu
+
+ENV PYTHONUNBUFFERED=1 \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PIP_NO_CACHE_DIR=1 \
+    WANDB_MODE=offline
+
+WORKDIR /app
+
+# build-essential only needed transiently for any source builds; dropped after.
+RUN apt-get update && apt-get install -y --no-install-recommends \
+        build-essential \
+    && rm -rf /var/lib/apt/lists/*
+
+# 1) Install torch first, from the selected wheel index (CPU or CUDA)...
+RUN pip install --upgrade pip \
+    && pip install "torch>=2.2,<3" --index-url ${TORCH_INDEX_URL}
+
+# 2) ...then the rest of the small, wheel-only reproducibility deps.
+COPY requirements/base.txt requirements/repro.txt ./requirements/
+RUN pip install -r requirements/repro.txt
+
+# Project code needed to build + train + evaluate any registered model.
+# Datasets are NOT baked in — they are mounted at runtime (see docker-compose).
+COPY models/ ./models/
+COPY training/ ./training/
+COPY features/ ./features/
+COPY analysis/ ./analysis/
+COPY scripts/ ./scripts/
+
+# A package marker so `python -m` / imports resolve a `data` namespace if needed.
+RUN mkdir -p data && touch data/__init__.py
+
+ENTRYPOINT ["python", "-u", "scripts/run_experiment.py"]
+CMD ["--help"]

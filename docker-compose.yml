@@ -1,0 +1,44 @@
+# Reproducibility stack for the RA-TFT crisis-EWS thesis.
+#
+# The default build is CPU-only and runs anywhere (no NVIDIA required).
+# For an NVIDIA GPU, layer the override file on top:
+#
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml build train
+#   docker compose -f docker-compose.yml -f docker-compose.gpu.yml run --rm train ...
+#
+# See docs/replication.md for the full lecturer-facing walkthrough.
+
+services:
+  # ── Training / evaluation (the headline reproduction) ────────────────────
+  train:
+    build:
+      context: .
+      dockerfile: Dockerfile.train
+      args:
+        TORCH_INDEX_URL: https://download.pytorch.org/whl/cpu
+    image: ra-tft-train:cpu
+    environment:
+      WANDB_MODE: offline
+    volumes:
+      - ./data:/app/data:ro          # datasets (read-only)
+      - ./results:/app/results       # metrics JSON written here
+      - ./checkpoints:/app/checkpoints
+    # Default shows the CLI help. Override with a real run, e.g.:
+    #   docker compose run --rm train --model xgboost --task B \
+    #     --data-dir data/shared/processed/taskb_spx_bbg_onset_trough \
+    #     --results-dir results --checkpoint-dir checkpoints --device auto
+    command: ["--help"]
+
+  # ── Optional: rebuild the processed datasets from raw sources ────────────
+  # Only needed if reproducing the data pipeline itself. Requires a FRED API
+  # key in .env (copy .env.example -> .env first).
+  data:
+    build:
+      context: .
+      dockerfile: Dockerfile.data
+    image: ra-tft-data:latest
+    profiles: ["data"]               # not built/started by default
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data

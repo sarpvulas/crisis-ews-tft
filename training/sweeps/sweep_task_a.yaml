@@ -1,0 +1,58 @@
+program: scripts/train.py
+method: bayes
+metric:
+  name: val_loss
+  goal: minimize
+
+parameters:
+  model:
+    value: ra-tft
+  task:
+    value: A
+  wandb:
+    value: true
+
+  lr:
+    distribution: log_uniform_values
+    min: 1e-4
+    max: 1e-2
+
+  batch-size:
+    values: [32, 64, 128]
+
+  # Architecture (passed via config overrides in sweep agent)
+  state_size:
+    values: [32, 64, 128]
+
+  attention_heads:
+    values: [1, 2, 4, 8]
+
+  lstm_layers:
+    values: [1, 2, 3]
+
+  dropout:
+    values: [0.05, 0.1, 0.2, 0.3]
+
+  encoder_steps:
+    values: [36, 48, 60]
+
+  # Loss weights
+  gamma:
+    distribution: uniform
+    min: 0.1
+    max: 1.0
+
+  delta:
+    distribution: uniform
+    min: 0.1
+    max: 0.5
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - --model=ra-tft
+  - --task=A
+  - --wandb
+  - --epochs=50
+  - ${args}

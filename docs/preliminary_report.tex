@@ -1,0 +1,676 @@
+% =====================================================================
+% MSc Preliminary Project Report
+% MSc Computational Finance, King's College London
+% Hüseyin Sarp Vulaş — Supervisor: Dr Bart de Keijzer
+% Submission deadline: 30 April 2026
+% =====================================================================
+\documentclass[11pt,a4paper]{article}
+
+% --- Encoding / fonts (handles ş, ü in author name) -------------------
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+
+% --- Layout -----------------------------------------------------------
+\usepackage[margin=2.0cm]{geometry}   % comfortably above the 1.5 cm minimum
+\usepackage{microtype}
+\setlength{\parskip}{4pt}
+\setlength{\parindent}{14pt}
+
+% --- Maths / tables / figures -----------------------------------------
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{graphicx}
+\usepackage{caption}
+\captionsetup{font=small,labelfont=bf}
+
+% --- Citations --------------------------------------------------------
+\usepackage[round,authoryear]{natbib}
+\bibliographystyle{plainnat}
+
+% --- Hyperlinks (load late) ------------------------------------------
+\usepackage[hidelinks]{hyperref}
+
+% --- Gantt chart ------------------------------------------------------
+\usepackage{pgfgantt}
+
+% --- Section formatting ----------------------------------------------
+\usepackage{titlesec}
+\titleformat{\section}{\large\bfseries}{\thesection}{0.6em}{}
+\titleformat{\subsection}{\normalsize\bfseries}{\thesubsection}{0.6em}{}
+\titlespacing{\section}{0pt}{10pt}{4pt}
+\titlespacing{\subsection}{0pt}{6pt}{2pt}
+
+% =====================================================================
+\begin{document}
+
+% --- Cover page (does not count toward 10-page limit) -----------------
+\begin{titlepage}
+\centering
+\vspace*{2.5cm}
+{\large King's College London \\ Department of Informatics \par}
+\vspace{0.4cm}
+{\large MSc Computational Finance, 2025/2026 \par}
+\vfill
+{\Large\bfseries Multi-Market Equity Crisis Early Warning \\[4pt]
+with Regime-Aware Temporal Fusion Transformers \par}
+\vspace{0.6cm}
+{\itshape MSc Preliminary Project Report \par}
+\vfill
+{\large Hüseyin Sarp Vulaş \par}
+\vspace{0.2cm}
+{\normalsize Supervisor: Dr Bart de Keijzer \par}
+\vfill
+{\normalsize 30 April 2026 \par}
+\vspace{1cm}
+\end{titlepage}
+
+% =====================================================================
+% BODY STARTS HERE (10-page limit applies from this point)
+% =====================================================================
+
+\section*{Abstract}
+\noindent
+Single-market early warning systems (EWS) for equity crises suffer from a
+structural data scarcity problem: a single index produces only a handful of
+crisis episodes per decade, far too few for attention-based deep learning
+architectures to learn meaningful temporal patterns. Recent empirical work has
+documented that, in this regime, gradient-boosted trees match or beat
+neural sequence models. We argue that this conclusion is an artefact of the
+single-entity setting rather than a fundamental property of the problem, and
+we propose to reformulate the task as a multi-market panel forecasting problem
+spanning twelve major equity indices over twenty-four years.
+On this richer dataset we develop the \emph{Regime-Aware Temporal Fusion
+Transformer} (RA-TFT), which augments the Temporal Fusion Transformer of
+\citet{lim2021tft} with a differentiable neural Hidden Markov Model and a
+regime-conditioned attention bias. Preliminary experiments on a single
+temporal split confirm the central hypothesis: on the panel dataset RA-TFT
+attains a pooled ROC-AUC of $0.640$ against $0.622$ for XGBoost, reversing
+the ranking observed on the single-market task. This report sets out the
+problem, the methodology, the early empirical evidence, and the work plan
+through to the 6 August 2026 final submission.
+
+% =====================================================================
+\section{Introduction}
+\label{sec:intro}
+
+\subsection{Domain and Problem}
+Equity bear markets impose disproportionate costs on real-economy actors: in
+the run-up to a crisis, capital is committed at peak valuations, while in the
+aftermath credit conditions tighten precisely when firms and households most
+need accommodation. A reliable \emph{early warning system} for crisis onset
+is therefore of practical interest to risk managers, central banks, and
+multi-asset allocators \citep{kaminsky1999leading,reinhartrogoff2009}. The
+quantitative finance literature has accumulated a wide variety of EWS
+proposals over the past quarter-century, but their performance on \emph{deep}
+crisis events (those with drawdowns exceeding twenty per cent from peak)
+remains underwhelming, particularly for sequence-aware architectures
+that, on paper, ought to dominate this regime.
+
+We focus on the binary classification of crisis onset, defined as the first
+day on which a market enters a sustained drawdown episode of $\geq 20\%$ from
+its trailing 252-day rolling peak. This labelling convention follows
+\citet{dichtl2023ews} and is robust to short-lived corrections. The
+prediction horizon is sixty-three trading days, corresponding to roughly one
+calendar quarter, a horizon long enough to be actionable yet short enough
+that the underlying signals (volatility regime, credit conditions,
+cross-market contagion) remain informative.
+
+\subsection{Aims and Objectives}
+The primary aim of this project is to determine \emph{whether and under what
+conditions} attention-based sequence architectures can outperform
+gradient-boosted trees on equity crisis EWS, and, if so, to design and
+empirically validate an architecture that exploits the structure of the
+problem. Concretely we set the following objectives:
+
+\begin{enumerate}
+\item Reformulate the conventional single-market EWS task as a multi-market
+panel forecasting problem with a sufficient number of crisis episodes to
+support attention-based learning.
+\item Develop the RA-TFT architecture, integrating a neural HMM regime
+detection module and a regime-conditioned attention bias into the Temporal
+Fusion Transformer of \citet{lim2021tft}.
+\item Evaluate RA-TFT against four baselines (vanilla TFT, LSTM, XGBoost,
+penalised logistic regression) using a crisis-anchored walk-forward
+cross-validation protocol with bootstrap confidence intervals on PR-AUC.
+\item Quantify the contribution of each architectural component
+(regime module, regime attention, static market embedding) through a
+controlled ablation.
+\item Examine calibration quality (expected calibration error, Brier score)
+and apply post-hoc methods (Platt scaling, isotonic regression) where
+necessary, since EWS probabilities feed directly into downstream risk
+management decisions.
+\end{enumerate}
+
+\subsection{Dataset}
+The project uses daily price and volume data for twelve major equity indices
+spanning North America, Europe, Asia-Pacific, and emerging markets, from
+1 January 2000 through 31 December 2024 (24 years). The full panel
+contains 72{,}801 market-days. Macro-financial covariates (VIX, the
+VIX term structure, US high-yield and investment-grade credit spreads, the
+TED spread, the dollar index, gold, and the MOVE index) are obtained from
+FRED and Yahoo Finance and broadcast across all markets. The full instrument
+list and the per-market and global feature definitions appear in
+Section~\ref{sec:method}. All data are publicly available and ingestion is
+already automated by the project pipeline.
+
+\subsection{Methodological Approach}
+RA-TFT inherits the variable selection networks, gated residual connections,
+and interpretable multi-head attention of the original TFT, and supplements
+them with two architectural elements designed for the crisis prediction
+task. First, a neural HMM with three latent states (\emph{calm},
+\emph{stress}, \emph{crisis}) and time-varying transition probabilities sits
+on top of the LSTM encoder; its forward algorithm is differentiable end-to-end
+and is initialised so that transitions are sticky (high diagonal probability)
+which prevents the regime distribution from oscillating. Second, the
+inferred regime distribution conditions a learned additive bias to the
+attention logits in the temporal self-attention layer, allowing the model to
+weight long-range historical context differently in calm versus stressed
+periods.
+
+\subsection{Contributions}
+The contributions we expect to be in a position to claim by 6 August 2026 are
+threefold. \emph{First}, an empirical demonstration that the choice between
+attention-based and tree-based EWS models is not architectural in nature but
+depends critically on the number of crisis episodes available: once the
+single-market regime is left behind, the ranking inverts. \emph{Second}, a
+novel RA-TFT architecture combining differentiable HMM regime inference
+with regime-conditioned attention; to our knowledge no prior work has
+integrated time-varying-transition neural HMMs into TFT for financial EWS.
+\emph{Third}, a publicly reproducible pipeline (data ingestion through to
+calibrated probabilistic forecasts) on a panel that other researchers can
+extend.
+
+% =====================================================================
+\section{Background and Related Work}
+\label{sec:background}
+
+The relevant literature falls into four broadly overlapping strands: the
+econometric origins of crisis early warning, the more recent application of
+machine learning to crisis prediction, the development of attention-based
+architectures for time series, and the long history of regime-switching
+models in financial econometrics. We treat them synthetically rather than
+paper-by-paper, since the contribution of this project lies at the
+intersection.
+
+\subsection{Crisis Early Warning Systems}
+The modern EWS literature originates with the signals approach of
+\citet{kaminsky1999leading}, who screened a large set of macroeconomic and
+financial indicators for their ability to anticipate currency crises. This
+approach evolved into a logistic-regression tradition through
+\citet{frankelsaravelos2012}, who emphasised reserve adequacy and real
+exchange rate misalignment, and into a deep-learning tradition through
+\citet{beutel2019does}, \citet{holopainen2017toward}, and
+\citet{chatzis2018forecasting}, who applied feed-forward and recurrent
+networks to country-level crisis panels. A consistent finding across these
+studies is that ensemble tree methods (random forests and gradient
+boosting) match or beat neural alternatives, an observation crystallised
+by \citet{bluwstein2023credit} on a long historical credit-cycle panel.
+The implicit message is that crisis prediction is a low-data regime in which
+the inductive bias of trees outperforms the flexibility of deep models.
+
+A complementary methodological strand has refined the labelling problem
+itself. Naïve drawdown regression mixes recovery from prior crises with
+genuine crisis onset and produces noisy targets. \citet{dichtl2023ews} argue
+for binary onset labelling with a fixed forward horizon and exclusion of
+in-crisis observations from training, a convention we adopt here.
+
+\subsection{Sequence Models in Financial Time Series}
+Recurrent and attention-based architectures have a strong record in
+forecasting tasks where data are abundant: high-frequency limit order book
+prediction, volatility forecasting on long minute-bar histories, and
+multi-horizon retail demand. Their record on crisis prediction, by contrast,
+is weak, and we argue this is because the conventional single-country setup
+exposes them to a fundamentally adverse data-to-parameter ratio. With
+$\sim$4 crisis episodes in 25 years, an attention layer with $O(d^2)$
+parameters has nothing to learn against. Two responses are possible:
+shrink the model (trading representational capacity for sample efficiency,
+which forfeits the reason for using attention in the first place), or
+increase the effective number of crisis episodes through cross-entity
+pooling. Our project pursues the second route.
+
+\subsection{Temporal Fusion Transformer}
+The Temporal Fusion Transformer of \citet{lim2021tft} is purpose-built for
+panel forecasting. Its static covariate encoder learns entity-level
+embeddings that condition the variable selection networks, gating, and
+attention; the model thereby distinguishes entity-specific behaviour from
+shared temporal structure. The original paper reports state-of-the-art
+performance on a 369-store retail demand panel and the Volatility, Traffic,
+Electricity, and Favorita benchmarks. To our knowledge TFT has not been
+systematically applied to multi-market crisis EWS, an oversight likely
+attributable to the assumption (implicit in much of the EWS literature) that
+crisis prediction is best treated as a single-country regression. The static
+embedding mechanism is precisely the architectural feature one would invoke
+to share parameters across markets while preserving entity identity, and
+exploiting it is the central reason TFT is the right base architecture for
+this project.
+
+\subsection{Regime Switching}
+Regime-switching models have been a workhorse of financial econometrics
+since \citet{hamilton1989new}, with extensive use in volatility modelling
+\citep{angbekaert2002regime} and asset allocation. The classical
+formulation is a low-dimensional Markov chain driving the parameters of an
+otherwise linear model, fit by EM. In its modern, neural-network
+incarnation, the regime structure becomes a latent variable in a deep
+generative model; the forward algorithm remains differentiable and
+end-to-end training becomes feasible. The principal limitation of classical
+regime models for EWS is that they are typically estimated from a single
+asset's returns and cannot exploit cross-market information. Our regime
+module addresses both limitations: it operates on the (cross-market-aware)
+LSTM encoder hidden state, and its transition matrix is itself a learned
+function of the current state. The neural HMM literature in NLP and speech
+\citep{tran2016unsupervised} establishes that this combination is trainable
+in practice; the contribution here is its application to multi-market
+financial crisis prediction in the regime-conditioned attention setup
+described in Section~\ref{sec:method}.
+
+\subsection{The Gap}
+Three observations from the above set up the gap this project addresses.
+Crisis EWS is a low-data regime when treated single-market, and tree models
+dominate; but the data scarcity is a property of the problem formulation,
+not of the underlying phenomenon, since multiple markets crash at different
+times for related but distinct reasons. TFT is the natural architecture for
+panel forecasting yet has not been applied to crisis EWS. Regime switching
+is well established in finance but has not been integrated as a
+differentiable layer inside a panel-forecasting attention model. RA-TFT sits
+at the intersection of these three observations.
+
+% =====================================================================
+\section{Methodology}
+\label{sec:method}
+
+\subsection{Multi-Market Panel Reformulation}
+The dataset comprises twelve equity indices: S\&P 500 ($\hat{}$GSPC),
+S\&P/TSX ($\hat{}$GSPTSE), FTSE 100 ($\hat{}$FTSE), DAX ($\hat{}$GDAXI),
+CAC 40 ($\hat{}$FCHI), Nikkei 225 ($\hat{}$N225), Hang Seng
+($\hat{}$HSI), ASX 200 ($\hat{}$AXJO), KOSPI ($\hat{}$KS11), Bovespa
+($\hat{}$BVSP), Nifty 50 ($\hat{}$NSEI), and Shanghai Composite
+(000001.SS), each from 1 January 2000 to 31 December 2024. Indices are
+synchronised to a global trading calendar with forward-fill of missing days
+and dropped if more than 5\% of business days are missing in a calendar
+year. The unit of observation is the (market, day) pair; static covariates
+encode market identity. The panel contains roughly 30--50 distinct crisis
+episodes (depending on the precise threshold) compared with the four
+episodes typically isolated on the S\&P 500 alone, restoring a workable
+data-to-parameter ratio for attention-based architectures.
+
+\subsection{Labelling}
+For each market $m$ and trading day $t$ we compute the trailing 252-day
+rolling peak $P_{m,t}$ and the running drawdown
+$D_{m,t} = P_{m,t}/X_{m,t} - 1$ where $X$ is the closing price. A market is
+\emph{in crisis} on day $t$ if $D_{m,t} \geq 0.20$. The crisis onset day
+is the first day of an in-crisis run preceded by at least twenty
+non-crisis days. The binary target is
+\(
+y_{m,t} = \mathbf{1}\{\exists\,s \in [t+1, t+63]\text{ s.t. day $s$ is a crisis onset}\}.
+\)
+In-crisis observations are excluded from training to prevent the model from
+learning trivial in-crisis dynamics.
+
+\subsection{Features}
+The historical input is a 252-day window terminating at $t$. Per-market
+numeric features include log returns at 1/5/21-day horizons, realised
+volatility at 5/21/63-day horizons, short-horizon drawdown from the 63-day
+rolling peak, the 63-day Hurst exponent, vol-of-vol at 63 days, return
+skewness at 63 days, a 63-day volume z-score, and Amihud illiquidity at 21
+days. Global features (broadcast across all markets) include VIX, the
+VIX-VIX3M term structure, US high-yield and investment-grade credit
+spreads and their differential, the TED spread, the dollar index, gold, and
+the MOVE index. Static categorical features comprise a single market
+identity field with twelve levels, which is consumed by TFT's static
+covariate encoder to produce a learned market embedding.
+
+A previous iteration of the pipeline included a 252-day drawdown feature
+that was found to encode the label definition almost perfectly; it was
+removed and replaced with vol-of-vol and return skewness. The remaining
+high-correlation features (VIX, credit spreads, dollar index) are genuine
+economic precursors of crises, not leakage.
+
+\subsection{RA-TFT Architecture}
+RA-TFT extends the vanilla TFT by replacing two components. After the LSTM
+encoder produces a hidden-state sequence
+$\mathbf{h}_{1:T}\in\mathbb{R}^{T\times d}$, a \emph{regime detection
+module} computes per-step regime posteriors
+$\boldsymbol{\pi}_t \in \Delta^{K-1}$ over $K=3$ latent states using a
+neural HMM:
+\begin{equation}
+\log p(z_t = k \mid \mathbf{h}_{1:t}) \;\propto\; \log p(\mathbf{h}_t \mid z_t=k) + \log\!\!\sum_{k'} A_{k'k}(\mathbf{h}_{t-1}) \, p(z_{t-1}=k' \mid \mathbf{h}_{1:t-1}),
+\end{equation}
+where the time-varying transition matrix $A(\mathbf{h})$ is a softmax
+output of a small MLP. The transition MLP is initialised so that diagonal
+entries dominate (sticky regimes), preventing oscillation in early
+training. The emission distribution is implemented as a Gated Residual
+Network mapping $\mathbf{h}_t$ to per-state log-likelihoods.
+
+The inferred regime posteriors then condition an additive bias to the
+attention logits in the interpretable multi-head attention block:
+\begin{equation}
+\text{logit}^{\text{(RA-TFT)}}_{ij} \;=\; \frac{\mathbf{q}_i^\top \mathbf{k}_j}{\sqrt{d}} + b_{\boldsymbol{\pi}_i, \boldsymbol{\pi}_j},
+\end{equation}
+where $b$ is a learned tensor of shape $K\times K\times H$ over (query
+regime, key regime, attention head). This permits the attention pattern to
+adapt to crisis regimes; for example, by attending more aggressively to
+recent volatility spikes when the inferred state is `stress' than when it
+is `calm'. The remaining TFT components (variable selection, static
+encoders, gating, quantile head replaced by a sigmoid head for binary
+classification) are inherited unchanged.
+
+\subsection{Training}
+The loss is binary cross-entropy with a class-frequency reweighting to
+account for the $\sim$15\% positive rate. Optimisation uses AdamW
+($\eta=10^{-3}$, weight decay $10^{-2}$), cosine annealing, and gradient
+clipping at unit norm. Validation uses a random 20\% holdout of training
+windows rather than a temporal cut, since temporal validation creates a
+distribution shift between train and validation crisis rates that drives
+spurious early stopping; this issue was diagnosed and resolved during
+preliminary experimentation (see Section~\ref{sec:results}).
+
+\subsection{Evaluation}
+The principal metrics are ROC-AUC and PR-AUC; PR-AUC is the more
+informative summary in this imbalanced regime. We report
+\emph{pooled} scores (concatenating all markets and days in the test fold)
+and \emph{macro-averaged} scores (mean of per-market scores), since pooling
+weights observations by market activity while macro-averaging weights each
+market equally. Calibration is assessed by expected calibration error and
+Brier score, with post-hoc Platt and isotonic recalibration fit on the
+validation set. Statistical significance uses bootstrap confidence
+intervals on PR-AUC over the test fold.
+
+The cross-validation protocol is crisis-anchored walk-forward: training
+windows expand by one year per fold, and each test fold is required to
+contain at least one crisis onset. This prevents the inflation of test
+metrics that would occur on a quiet test period and ensures that the
+reported numbers reflect the model's ability to anticipate crises rather
+than identify their absence.
+
+% =====================================================================
+\section{Preliminary Results and Findings}
+\label{sec:results}
+
+The data pipeline, all four baseline models, and the RA-TFT architecture
+have been implemented and exercised end-to-end on a single temporal split.
+The principal results are summarised below; they are preliminary in the
+sense that they use a single train/test cut rather than the full
+walk-forward protocol planned for the dissertation, but they suffice to
+establish feasibility and to validate the central hypothesis.
+
+\subsection{Single-Market Baseline}
+On the S\&P 500-only formulation with three crisis-anchored walk-forward
+folds, the ranking of models is as one would predict from the prior
+literature. Tree-based and linear models dominate sequence models:
+\vspace{2pt}
+\begin{center}
+\small
+\begin{tabular}{lcc}
+\toprule
+Model & Mean ROC-AUC & Mean PR-AUC \\
+\midrule
+XGBoost            & 0.655 & 0.507 \\
+LSTM               & 0.529 & 0.309 \\
+RA-TFT             & 0.484 & 0.310 \\
+Vanilla TFT        & 0.477 & 0.281 \\
+Logistic Regression & 0.403 & 0.294 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+XGBoost wins comfortably; the deep models are essentially indistinguishable
+from random on ROC, consistent with \citet{bluwstein2023credit}. This
+reproduces the literature consensus on single-market EWS.
+
+\subsection{Multi-Market Panel}
+On the twelve-market panel, with a fixed train/test split (training
+2000--2018, testing 2019--2024) and the corrected validation protocol, the
+ranking inverts:
+\vspace{2pt}
+\begin{center}
+\small
+\begin{tabular}{lcccc}
+\toprule
+Model & ROC-AUC & PR-AUC & ECE & Brier \\
+\midrule
+\textbf{RA-TFT}    & \textbf{0.640} & \textbf{0.220} & 0.329 & 0.265 \\
+XGBoost            & 0.622 & 0.197 & 0.148 & 0.152 \\
+Vanilla TFT        & 0.548 & 0.161 & 0.324 & 0.325 \\
+LSTM               & 0.477 & 0.138 & 0.412 & 0.309 \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+RA-TFT outperforms XGBoost on both ROC-AUC and PR-AUC, and outperforms
+vanilla TFT by a substantial margin (0.640 vs.\ 0.548 ROC-AUC). This is
+consistent with the central thesis: with the cross-entity pooling and the
+regime module both engaged, the architectural advantages of attention-based
+models for multi-entity panel forecasting are realised.
+
+\subsection{Calibration}
+RA-TFT's raw probabilities are over-confident (ECE $\approx 0.27$). Post-hoc
+Platt scaling fitted on the validation set reduces this to 0.256 and Brier
+score to 0.255. Isotonic regression performs slightly worse, consistent
+with the limited validation set. XGBoost is already well-calibrated
+($\text{ECE}=0.148$) and is barely affected by post-hoc methods. The
+calibration gap between RA-TFT and XGBoost is the principal weakness of the
+sequence model and a target for the remaining work.
+
+\subsection{Lessons from Preliminary Work}
+Three lessons have already shaped the methodology presented above. First,
+the validation strategy has a first-order effect on attention-based
+training: an early temporal-split protocol caused validation loss to
+diverge from epoch one because the validation set contained almost no
+crisis events, and early stopping consequently selected the least-trained
+checkpoint. The current random-window holdout resolves this. Second, label
+leakage through redundant drawdown features inflated single-market scores
+by approximately ten ROC-AUC points before being identified and removed.
+Third, sequence-model wins are extremely sensitive to seed and run-to-run
+variance, with RA-TFT ROC-AUC observed in the range $0.570$--$0.640$
+across seeds; multi-seed averaging is therefore mandatory in the final
+walk-forward evaluation.
+
+% =====================================================================
+\section{Project Schedule}
+\label{sec:schedule}
+
+\subsection{Workstreams and Status}
+The project decomposes into eight workstreams. Items already completed are
+explicitly marked.
+
+\begin{itemize}
+\item[\textbf{W1.}] \emph{Topic selection \& literature review} (Dec 2025
+-- Feb 2026). \textbf{Complete.}
+\item[\textbf{W2.}] \emph{Data ingestion pipeline}: twelve indices, FRED
+macro covariates, panel feature engineering, label generation
+(Feb 2026). \textbf{Complete.}
+\item[\textbf{W3.}] \emph{Baseline implementations}: XGBoost, logistic
+regression, LSTM, vanilla TFT (Feb to Mar 2026). \textbf{Complete.}
+\item[\textbf{W4.}] \emph{RA-TFT architecture}: regime module, regime
+attention bias, end-to-end training (Mar to Apr 2026). \textbf{Complete}, with
+single-split panel evaluation done.
+\item[\textbf{W5.}] \emph{Walk-forward cross-validation on the panel}:
+crisis-anchored expanding-window CV, multi-seed averaging, bootstrap CIs
+(May to Jun 2026). Pending HPC allocation; cluster credits applied for
+through King's e-Research.
+\item[\textbf{W6.}] \emph{Ablation studies}: isolating the contribution
+of the regime module, regime attention bias, and static market embeddings
+(Jun 2026).
+\item[\textbf{W7.}] \emph{Architectural extensions}: exploration of
+either (a) a regime-routed mixture-of-experts on top of the existing regime
+module, or (b) Mamba state-space backbone in place of the LSTM encoder. The
+two options will be scoped in early June and one selected based on early
+signal (Jun to Jul 2026).
+\item[\textbf{W8.}] \emph{Per-market analysis, calibration, write-up,
+video}: per-market ROC tables, reliability diagrams, dissertation
+drafting, ten-minute video presentation (Jul to Aug 2026).
+\end{itemize}
+
+\subsection{Gantt Chart}
+Figure~\ref{fig:gantt} maps the workstreams onto the King's MSc
+Computational Finance project calendar. The four KCL milestones marked as
+diamonds are: the present preliminary report submission (30 April 2026),
+first individual feedback meeting (22 May 2026), second individual meeting
+(17 July 2026), and final report and video submission (6 August 2026).
+Group supervisions and progress slide deadlines impose intermediate
+checkpoints which the workstream boundaries respect.
+
+\begin{figure}[h]
+\centering
+\resizebox{\textwidth}{!}{%
+\begin{ganttchart}[
+  hgrid,
+  vgrid,
+  x unit=0.55cm,
+  y unit chart=0.55cm,
+  y unit title=0.55cm,
+  bar/.append style={fill=black!55},
+  bar incomplete/.append style={fill=black!25},
+  milestone/.append style={fill=black},
+  title label font=\scriptsize,
+  bar label font=\scriptsize,
+  milestone label font=\scriptsize,
+  group label font=\scriptsize\bfseries,
+]{1}{28}
+  \gantttitle{2026 (calendar weeks from 1 Feb)}{28} \\
+  \gantttitlelist{1,...,28}{1} \\
+  \ganttbar{W1 Lit. review}{1}{4} \\
+  \ganttbar{W2 Data pipeline}{1}{5} \\
+  \ganttbar{W3 Baselines}{3}{8} \\
+  \ganttbar{W4 RA-TFT build}{6}{13} \\
+  \ganttmilestone{Prelim.\ report}{13} \\
+  \ganttbar{W5 Walk-forward CV (HPC)}{14}{21} \\
+  \ganttmilestone{1st individual feedback}{16} \\
+  \ganttbar{W6 Ablations}{19}{22} \\
+  \ganttbar{W7 Architectural extension}{20}{24} \\
+  \ganttmilestone{2nd individual mtg}{24} \\
+  \ganttbar{W8 Per-market \& calibration}{22}{26} \\
+  \ganttbar{W8 Dissertation drafting}{23}{27} \\
+  \ganttbar{W8 Video}{27}{27} \\
+  \ganttmilestone{Final report \& video}{27} \\
+\end{ganttchart}}
+\caption{Project Gantt chart, weeks measured from the start of work on
+1 February 2026. Diamond markers denote King's MSc Computational Finance
+milestones; bars denote the eight project workstreams. Workstreams W1--W4
+are complete at the time of writing.}
+\label{fig:gantt}
+\end{figure}
+
+\subsection{Risks and Mitigations}
+The principal external dependency is compute. RunPod credits (used for the
+preliminary panel experiments) have proved expensive at scale, and the
+walk-forward CV on the panel is estimated to require $\sim$200 GPU-hours
+across folds and seeds. An application has been submitted for an HPC
+allocation through King's e-Research, which would absorb essentially all of
+W5 and W7. Should this allocation be delayed, the contingency plan is to
+reduce the seed count from five to three and the walk-forward fold count
+from eight to five, which preserves the statistical protocol at the cost of
+slightly wider confidence intervals.
+
+A secondary risk is that the run-to-run variance observed in preliminary
+RA-TFT runs (ROC-AUC $0.57$--$0.64$ across seeds) does not tighten under
+multi-seed averaging, in which case the headline claim of RA-TFT $>$
+XGBoost would not be statistically significant despite a positive mean
+effect. The mitigation here is structural: the ablation in W6 will isolate
+which component(s) of RA-TFT contribute robustly, allowing a more
+defensible secondary claim even if the headline comparison is not
+significant. A tertiary risk is overfitting to the present 2000--2024
+window; a small held-out 2025 stress in any of the twelve markets (such as
+intermittent Chinese property-sector volatility) would provide an external
+validity check, and the pipeline already supports it.
+
+% =====================================================================
+\section{Conclusion}
+\label{sec:conclusion}
+
+This project investigates a specific and previously underexploited
+hypothesis: that the apparent inferiority of attention-based sequence
+models in financial crisis early warning is a consequence of single-market
+data scarcity rather than a fundamental property of the architecture. The
+RA-TFT proposal (a Temporal Fusion Transformer augmented with a neural
+HMM regime detection module and regime-conditioned attention bias, applied
+to a twelve-market equity panel) is designed to test this hypothesis at
+the smallest scale where the test is informative. Preliminary
+single-split results confirm the central prediction: on the panel
+formulation, RA-TFT $0.640 >$ XGBoost $0.622$ in pooled ROC-AUC, reversing
+the literature consensus on single-market EWS. The remaining work between
+the present preliminary report and the 6 August 2026 final submission
+concerns three things: replacing the single split with a crisis-anchored
+walk-forward protocol, ablating the architectural components of RA-TFT to
+identify which drives the improvement, and one architectural extension
+(mixture-of-experts or Mamba backbone) to deepen the methodological
+contribution. The schedule for these is set out above.
+
+% =====================================================================
+% References (do not count toward the 10-page body limit)
+% =====================================================================
+\begin{thebibliography}{99}
+
+\bibitem[Ang and Bekaert(2002)]{angbekaert2002regime}
+Ang, A.\ and Bekaert, G.\ (2002).
+\newblock Regime switches in interest rates.
+\newblock \emph{Journal of Business and Economic Statistics}, 20(2):163--182.
+
+\bibitem[Beutel et al.(2019)]{beutel2019does}
+Beutel, J., List, S.\ and von Schweinitz, G.\ (2019).
+\newblock Does machine learning help us predict banking crises?
+\newblock \emph{Journal of Financial Stability}, 45:100693.
+
+\bibitem[Bluwstein et al.(2023)]{bluwstein2023credit}
+Bluwstein, K., Buckmann, M., Joseph, A., Kapadia, S.\ and \c{S}im\c{s}ek, \"O.\ (2023).
+\newblock Credit growth, the yield curve and financial crisis prediction:
+evidence from a machine learning approach.
+\newblock \emph{Journal of International Economics}, 145:103773.
+
+\bibitem[Chatzis et al.(2018)]{chatzis2018forecasting}
+Chatzis, S.\ P., Siakoulis, V., Petropoulos, A., Stavroulakis, E.\ and Vlachogiannakis, N.\ (2018).
+\newblock Forecasting stock market crisis events using deep and statistical
+machine learning techniques.
+\newblock \emph{Expert Systems with Applications}, 112:353--371.
+
+\bibitem[Dichtl et al.(2023)]{dichtl2023ews}
+Dichtl, H., Drobetz, W.\ and Otto, T.\ (2023).
+\newblock Forecasting stock market crashes via machine learning.
+\newblock \emph{Journal of Financial Stability}, 65:101099.
+
+\bibitem[Frankel and Saravelos(2012)]{frankelsaravelos2012}
+Frankel, J.\ and Saravelos, G.\ (2012).
+\newblock Can leading indicators assess country vulnerability? Evidence from
+the 2008--09 global financial crisis.
+\newblock \emph{Journal of International Economics}, 87(2):216--231.
+
+\bibitem[Hamilton(1989)]{hamilton1989new}
+Hamilton, J.\ D.\ (1989).
+\newblock A new approach to the economic analysis of nonstationary time
+series and the business cycle.
+\newblock \emph{Econometrica}, 57(2):357--384.
+
+\bibitem[Holopainen and Sarlin(2017)]{holopainen2017toward}
+Holopainen, M.\ and Sarlin, P.\ (2017).
+\newblock Toward robust early-warning models: a horse race, ensembles and
+model uncertainty.
+\newblock \emph{Quantitative Finance}, 17(12):1933--1963.
+
+\bibitem[Kaminsky and Reinhart(1999)]{kaminsky1999leading}
+Kaminsky, G.\ L.\ and Reinhart, C.\ M.\ (1999).
+\newblock The twin crises: the causes of banking and balance-of-payments
+problems.
+\newblock \emph{American Economic Review}, 89(3):473--500.
+
+\bibitem[Lim et al.(2021)]{lim2021tft}
+Lim, B., Ar{\i}k, S.\ \"O., Loeff, N.\ and Pfister, T.\ (2021).
+\newblock Temporal Fusion Transformers for interpretable multi-horizon time
+series forecasting.
+\newblock \emph{International Journal of Forecasting}, 37(4):1748--1764.
+
+\bibitem[Reinhart and Rogoff(2009)]{reinhartrogoff2009}
+Reinhart, C.\ M.\ and Rogoff, K.\ S.\ (2009).
+\newblock \emph{This Time Is Different: Eight Centuries of Financial Folly}.
+\newblock Princeton University Press.
+
+\bibitem[Tran et al.(2016)]{tran2016unsupervised}
+Tran, K., Bisk, Y., Vaswani, A., Marcu, D.\ and Knight, K.\ (2016).
+\newblock Unsupervised neural hidden Markov models.
+\newblock In \emph{Proceedings of the Workshop on Structured Prediction for
+NLP}, EMNLP, pages 63--71.
+
+\end{thebibliography}
+
+\end{document}

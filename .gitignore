@@ -1,0 +1,47 @@
+*.pyc
+__pycache__/
+.DS_Store
+~$*
+*.egg-info/
+wandb/
+*.pt
+node_modules/
+.next/
+.env
+checkpoints/
+
+# --- Bloomberg-licensed data (not redistributed) + large/derived artefacts ---
+data/shared/
+data/raw/
+data/processed/*.parquet
+data/processed/**/*.parquet
+results/
+logs/
+fv_*/
+output/
+ablation_results/
+*.db
+tft_results.png
+
+# --- LaTeX build artefacts -------------------------------------------------
+# Build with: cd docs && latexmk -pdf dissertation.tex
+# docs/dissertation.pdf is committed deliberately (the README links to it).
+*.aux
+*.bbl
+*.blg
+*.out
+*.toc
+*.lof
+*.lot
+*.synctex.gz
+*.fls
+*.fdb_latexmk
+docs/*.log
+
+# --- recorded video takes (large binaries) ---
+# Leading slash anchors this to the repo root. Without it the pattern also
+# matches scripts/video/, which is source and must stay tracked.
+/video/
+
+# compiled camview binary
+scripts/video/.build/

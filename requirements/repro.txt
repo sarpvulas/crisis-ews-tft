@@ -1,0 +1,24 @@
+# Reproducibility dependencies.
+#
+# The minimal, reliable set needed to reproduce the headline shared-data
+# Task B result (models: xgboost, lstm, ra-tft, tdt) via
+# scripts/run_experiment.py. Every package here ships as a pre-built wheel,
+# so the image builds on CPU-only machines in ~1-2 minutes with no compiler
+# pain. (The heavy novel-architecture extras in requirements/cluster.txt —
+# giotto-tda, gudhi, torch-geometric, torchsde, diffusers — are only needed
+# for the optional 'topo-ratft' model and are deliberately excluded.)
+#
+# NOTE: in Docker, torch is installed FIRST from a chosen wheel index
+# (CPU or CUDA) — see Dockerfile.train. The torch line below is just a
+# version floor and is skipped if a compatible torch is already present.
+
+-r base.txt
+
+torch>=2.2,<3
+scikit-learn>=1.4
+xgboost>=1.7,<2.0
+scipy>=1.11
+omegaconf>=2.3
+pyyaml>=6.0
+wandb>=0.16
+tqdm>=4.66

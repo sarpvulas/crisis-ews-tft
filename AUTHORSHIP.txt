@@ -1,0 +1,37 @@
+AUTHORSHIP STATEMENT
+====================
+
+I verify that I am the sole author of the programs contained in this archive,
+except where explicitly stated to the contrary.
+
+Signed:  Hüseyin Sarp Vulaş
+Date:    6 August 2026
+
+
+Scope and exceptions
+--------------------
+
+This archive contains the source code for the MSc dissertation "Dense Drawdown
+Supervision for Equity Crisis Early Warning: A Multi-Task Temporal Fusion
+Transformer and an Honest Test of Regime Awareness" (MSc Computational Finance,
+King's College London, 2025/2026; supervisor: Dr Bart de Keijzer).
+
+Third-party libraries. Well-known, freely obtainable third-party libraries
+(PyTorch, scikit-learn, XGBoost, NumPy, pandas, SciPy, and the remaining
+packages pinned in requirements/) are NOT included in this archive. They are
+declared in requirements/repro.txt and requirements/cluster.txt and are
+referenced in the report.
+
+Prior work implemented from the literature. The Temporal Fusion Transformer
+backbone is my own implementation of the architecture described by Lim et al.
+(2021), and the regime-switching and focal-loss components follow the
+formulations of Hamilton (1989) / Ang and Bekaert (2002) and Lin et al. (2017)
+respectively. All such sources are cited in the report. The implementations
+themselves are my own.
+
+Data. The market series underlying this project are daily Bloomberg data and
+are licensed separately; no Bloomberg data is included in this archive. The
+included datasets under data/mock/ are mock surrogates I generated (see the
+README's Data & licensing section); they are unusable as market data and
+exist solely so the pipeline can be executed. See LICENSE and the report's
+Data section.

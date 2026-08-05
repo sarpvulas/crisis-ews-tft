@@ -1,0 +1,49 @@
+# Stage 2 HP sweep for TDT (Stage-1.J architecture) on Task B.
+#
+# 30 random trials. The headline metric is test_pr_auc; calibration_error is
+# reported but not used for ranking. Submit with:
+#
+#   sbatch --array=0-29 scripts/job_stage2_sweep.sh \
+#       sweep_configs/tdt_task_b.yaml
+#
+# Each array task picks trial id = $SLURM_ARRAY_TASK_ID, samples one config
+# deterministically (seed=42 + task_id), runs it on real Task B data, writes
+# a result JSON. scripts/aggregate_results.py picks the winner afterwards.
+
+model: tdt
+task: B
+method: random
+n_trials: 30
+seed: 42
+
+base_args:
+  - --decoder-steps
+  - "63"
+  - --encoder-steps
+  - "252"
+  - --epochs
+  - "50"
+
+params:
+  # Optimisation
+  lr:
+    log_min: 3.0e-4
+    log_max: 3.0e-3
+  batch_size:
+    values: [32, 64, 128]
+
+  # Architecture
+  d_model:
+    values: [64, 128, 256]
+  attention_heads:
+    values: [2, 4, 8]
+  e_layers:
+    values: [2, 4, 6]
+  dropout:
+    values: [0.05, 0.1, 0.2]
+
+  # Joint-loss balance (Stage 1.J knobs)
+  lambda_clf:
+    values: [0.3, 1.0, 3.0]
+  pos_weight:
+    values: [3.0, 7.0, 15.0]

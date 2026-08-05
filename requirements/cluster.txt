@@ -1,0 +1,64 @@
+# Cluster (CUDA) training dependencies for KCL CREATE HPC.
+# Linux/CUDA wheels — do NOT use this on the M3 Max local dev box (use train.txt there).
+#
+# Install order matters: torch first (so CUDA build is picked), then everything else.
+# On the cluster:
+#   module load python/3.11
+#   python -m venv ~/envs/ra-tft && source ~/envs/ra-tft/bin/activate
+#   pip install --upgrade pip
+#   pip install -r requirements/cluster.txt
+
+-r base.txt
+
+# Core deep learning
+torch>=2.2,<3
+torchvision>=0.17
+torchaudio>=2.2
+
+# Classic baselines
+scikit-learn>=1.4
+xgboost>=1.7,<2.0
+statsmodels>=0.14
+scipy>=1.11
+
+# Logging / experiment tracking (offline mode supported via WANDB_MODE=offline)
+wandb>=0.16
+tqdm>=4.66
+
+# Config / utilities
+omegaconf>=2.3
+pyyaml>=6.0
+
+# Plotting (for analysis scripts run on cluster)
+matplotlib>=3.8
+seaborn>=0.13
+
+# ---- Novel-architecture dependencies ----
+# Option A — Causal-DAG-conditioned regime transformer
+dagma>=1.1
+networkx>=3.2
+
+# Option B — Neural jump-SDE
+torchsde>=0.2.6
+torchdiffeq>=0.2.4
+
+# Option C — Topological deep learning (persistent homology)
+giotto-tda>=0.6
+gudhi>=3.9
+
+# Option D — Diffusion-generative classifier
+diffusers>=0.27
+einops>=0.7
+accelerate>=0.28
+
+# Option E — Hyperbolic graph transformer
+geoopt>=0.5
+torch-geometric>=2.5
+
+# Foundation models (Chronos-2 etc.)
+transformers>=4.40
+huggingface_hub>=0.22
+sentencepiece>=0.2
+
+# Test / dev (cluster-side smoke tests)
+pytest>=8.0

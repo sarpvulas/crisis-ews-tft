@@ -1,0 +1,45 @@
+# Keep the build context small: only source code is copied into images.
+# Datasets, checkpoints and outputs are mounted at runtime as volumes.
+
+# Version control / IDE / OS
+.git
+.gitignore
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+
+# Python artifacts
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+venv/
+.venv/
+env/
+
+# Datasets & run artifacts — mounted as volumes, never baked into images
+data/raw/
+data/processed/
+data/shared/
+data/expanded/
+output/
+results/
+checkpoints/
+ablation_results/
+wandb/
+*.pt
+*.db
+*.sqlite
+
+# Frontend build (installed fresh in Dockerfile.dashboard)
+dashboard/frontend/node_modules/
+dashboard/frontend/.next/
+
+# Report site & docs (not needed inside compute images)
+report/
+docs/
+
+# Secrets
+.env

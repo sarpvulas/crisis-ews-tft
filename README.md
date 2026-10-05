@@ -291,3 +291,5 @@ I **exclude entirely**: the raw Bloomberg pull (`data/shared/expanded/*.xlsx`), 
 If you use my work, please cite my dissertation (see also [`CITATION.cff`](CITATION.cff)):
 
 > Vulaş, H. S. (2026). *Dense Drawdown Supervision for Equity Crisis Early Warning: A Multi-Task Temporal Fusion Transformer and an Honest Test of Regime Awareness.* MSc Dissertation, King's College London.
+
+Contact: [LinkedIn](https://www.linkedin.com/in/sarpvulas/)

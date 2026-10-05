@@ -1,3 +1,5 @@
+> **Historical working notes from before the final experiments. Superseded by the dissertation (docs/dissertation.pdf); some statements here are outdated.**
+
 # Known Issues and Next Steps
 
 ## Current State
@@ -6,7 +8,7 @@ Multi-market panel EWS pipeline is built and functional:
 - 12 equity indices downloaded and processed (72,801 rows)
 - `PanelCrisisDataset` handles per-market windowing with `market_id` as static categorical
 - RA-TFT, Vanilla TFT, LSTM, XGBoost comparison script ready
-- RunPod GPU training attempted but results are poor due to issues below
+- Cloud GPU training attempted but results are poor due to issues below
 
 ## Issue 1: Val Loss Divergence (Critical)
 
@@ -105,3 +107,13 @@ sufficient crisis events for the attention mechanism to learn from.
    - Use cosine annealing LR schedule
    - Increase training data by lowering crisis threshold to 15%
 4. Run walk-forward CV on panel data for publishable results
+
+## Post-hoc Platt calibration is not guaranteed rank-preserving
+
+The post-hoc Platt calibrator is fit without a positive-slope constraint, so its
+"monotonic, rank-preserving" property holds only when the fitted slope is
+positive. In a 1-epoch smoke run on the mock data an undertrained model gave an
+inverted ranking after calibration (ROC-AUC 0.34 against 0.66 uncalibrated). The
+dissertation tables report raw (uncalibrated) test metrics and are not affected.
+In four of six folds the validation split has no positive labels, so Platt
+cannot be fitted there.

@@ -1,0 +1,20 @@
+cff-version: 1.2.0
+message: "If you use this work, please cite the dissertation below."
+type: thesis
+title: "Dense Drawdown Supervision for Equity Crisis Early Warning: A Multi-Task Temporal Fusion Transformer and an Honest Test of Regime Awareness"
+authors:
+  - family-names: "Vulaş"
+    given-names: "Hüseyin Sarp"
+thesis-type: "MSc dissertation"
+degree: "MSc Computational Finance"
+institution:
+  name: "King's College London"
+year: 2026
+license: MIT
+repository-code: "https://github.com/sarpvulas/crisis-ews-tft"
+url: "https://github.com/sarpvulas/crisis-ews-tft/blob/main/docs/dissertation.pdf"
+keywords:
+  - temporal fusion transformer
+  - financial crisis
+  - early warning system
+  - walk-forward validation

@@ -1,7 +1,26 @@
 # Equity Crisis Early Warning with Temporal Fusion Transformers
 
-> **My MSc Computational Finance dissertation — King's College London**
+[![CI](https://github.com/sarpvulas/crisis-ews-tft/actions/workflows/ci.yml/badge.svg)](https://github.com/sarpvulas/crisis-ews-tft/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+
+> **My MSc Computational Finance dissertation, King's College London (2026)**
 > Hüseyin Sarp Vulaş · Supervisor: Dr Bart de Keijzer
+
+**Read the dissertation: [`docs/dissertation.pdf`](docs/dissertation.pdf)**
+
+## TL;DR
+
+Stock-market crashes are rare, so models that try to warn of them have very few examples to learn from. I built a leak-free test of whether a Temporal Fusion Transformer can warn of an S&P 500 drawdown crisis starting within the next 63 trading days, and checked whether regime awareness (a hidden-Markov regime module with regime-conditioned attention) helps. Regime awareness made no measurable difference; what helped was adding an auxiliary head that predicts the forward drawdown every day, which gave a model better calibrated than the vanilla TFT (lower Brier score in all six crisis folds). Its macro PR-AUC of 0.487 beats the 0.357 of the best tuned tree model (that tree configuration was chosen on the test folds, so the comparison favours the tree), while its gain over the vanilla TFT (0.487 vs 0.459) is not statistically significant; the head ablation's +0.034 macro PR-AUC is (p = 0.031, CI [+0.013, +0.060]).
+
+## Why this matters
+
+Crisis early-warning models are easy to flatter: with only a handful of crises per market, look-ahead leakage, untuned baselines and one lucky run can all make a fashionable architecture look better than it is. This project uses walk-forward folds with a 63-day embargo, episode-level significance tests, calibration analysis and tuned baselines, so that a real improvement (the auxiliary drawdown head) can be told apart from an unsupported one (regime awareness).
+
+![S&P 500 with crisis episodes](docs/img/timeline.png)
+
+*S&P 500 (log scale), 2000-2026, with the six crisis episodes used as walk-forward test folds shaded.*
+
+## Detailed findings
 
 This is my dissertation project: a leak-free study of deep learning for **equity-crisis early warning (EWS)**. Given the market state up to today, I predict whether a drawdown crisis will *begin* within the next quarter (a 63-trading-day horizon). I take the **Temporal Fusion Transformer (TFT)** as my backbone and ask two questions:
 
@@ -11,22 +30,18 @@ This is my dissertation project: a leak-free study of deep learning for **equity
 **What I found (under a deliberately leak-free protocol):**
 
 - **Regime awareness is inert** — my fully regime-aware TFT is statistically indistinguishable from a vanilla TFT, and this holds across both the single-market and panel settings.
-- **What actually helps is a change to the *learning problem*, not the architecture:** I add a multi-task **auxiliary forward-drawdown head** that supervises the model on a signal defined *every* trading day, instead of only on the handful of sparse onset labels (my **"AF" recipe**). It is the **best-calibrated** model I tested (lower Brier in **all six** crisis folds; ECE 0.287 vs 0.319) and improves discrimination, concentrated in severe crises.
+- **What actually helps is a change to the *learning problem*, not the architecture:** I add a multi-task **auxiliary forward-drawdown head** that supervises the model on a signal defined *every* trading day, instead of only on the handful of sparse onset labels (my **"AF" recipe**). It is **better calibrated than the vanilla TFT** (lower Brier in **all six** crisis folds; ECE 0.287 vs 0.319) and improves discrimination, concentrated in severe crises.
 - **A three-way head ablation isolates the credit, and it lands on the auxiliary head alone.** Holding the objective fixed, adding the drawdown head gains `+0.034` macro PR-AUC and wins in **all six** crisis folds — episode-level Wilcoxon `p = 0.031` with a block-bootstrap CI of `[+0.013, +0.060]` that excludes zero, a stronger statement than the AF-vs-vanilla headline whose interval spans zero. The **focal loss is inert**: classification-only with focal sits `0.005` *below* the plain-BCE baseline (`p = 1.000`), so reading the recipe as "aux **and** focal" credits an ingredient that does no work. And the classification head **cannot** simply be swapped out — regression-only reaches `0.365` against a `0.336` prevalence baseline, below every configuration that keeps a classifier.
 - My deep models **beat *tuned* trees on the single-market task** (AF 0.487 vs best tuned tree 0.357 macro PR-AUC), and my capacity-matched recipe (**AFv2**) is **competitive with / marginally ahead of XGBoost on a 9-market panel** (0.385 vs 0.373 PR-AUC), which I confirm under a panel walk-forward.
 - My contribution is **methodological as much as architectural**: a reproducible, leak-free evaluation (embargoing, episode-level significance, calibration + usefulness analysis, tuned baselines) that separates a real, transferable improvement from a fashionable but unsupported one.
 
-📄 **Full write-up:** [`docs/dissertation.pdf`](docs/dissertation.pdf) · [`docs/dissertation.tex`](docs/dissertation.tex)
+**Full write-up:** [`docs/dissertation.pdf`](docs/dissertation.pdf) · [`docs/dissertation.tex`](docs/dissertation.tex)
 
 ---
 
 ## The problem at a glance
 
 Crisis episodes are rare, so a single market only gives me a handful per decade. I label a **crisis onset** as the first day of a sustained drawdown of ≥10% from the trailing 252-day peak ("dd10"), and predict its onset over the next 63 trading days. I turn six S&P 500 crisis episodes (2000–2026) into crisis-anchored **walk-forward** test folds, each with an expanding training history and a 63-day **embargo** to prevent look-ahead leakage.
-
-![S&P 500 with crisis episodes](docs/img/timeline.png)
-
-*S&P 500 (log scale), 2000–2026, with the six crisis episodes I use as walk-forward test folds shaded.*
 
 ---
 
@@ -111,7 +126,7 @@ features/           causal feature engineering; topology.py (exploratory, not us
 
 data/
   pipelines/                crisis labelling, feature engineering, walk-forward splits + embargo
-  raw/                      not committed; the pipelines download FRED and Yahoo Finance series here
+  raw/                      not committed (git-ignored); the pipelines download FRED and Yahoo Finance series here
   mock/                     mock surrogate datasets for running the pipeline (see Data & licensing)
   labels/                   Laeven-Valencia crisis chronology (reference only)
 
@@ -170,6 +185,20 @@ docker compose run --rm train \
   --data-dir data/mock/taskb_spx_bbg_onset_trough_rp252_dd10_emb63_6f \
   --results-dir results --checkpoint-dir checkpoints --device auto
 ```
+
+**Without Docker** (CPU only; tested on Python 3.11): install PyTorch from the CPU wheel index and the pinned dependencies, then call the same script directly. A 1-epoch run of the AF command on the mock data took about 2 minutes (1 min 56 s) on a laptop CPU (the 40-epoch command above takes proportionally longer):
+
+```bash
+pip install "torch>=2.2,<3" --index-url https://download.pytorch.org/whl/cpu
+pip install -r requirements/repro.txt
+python scripts/run_experiment.py --model ra-tft --task B --seed 0 --epochs 1 \
+  --use-aux 1 --lambda-aux 0.5 --loss focal --focal-gamma 2 --pos-weight 3.4 \
+  --posthoc-calibrate platt \
+  --data-dir data/mock/taskb_spx_bbg_onset_trough_rp252_dd10_emb63_6f \
+  --results-dir results --checkpoint-dir checkpoints --device cpu
+```
+
+The test suite runs with `pip install -r requirements/data.txt "matplotlib>=3.8" pytest && python -m pytest -q`.
 
 Drop the `--use-aux … --pos-weight 3.4` flags to get the **vanilla TFT** for comparison. Swap `--model` for `xgboost`, `plessis-rf`, `histgb`, `lstm`, or `logistic` to run the **tree/baseline** models.
 
@@ -237,12 +266,14 @@ Key flags on `run_experiment.py`:
 
 ## Data & licensing
 
+**Licensing.** The MIT licence in [`LICENSE`](LICENSE) covers the source code only. The market data used by this project (daily Bloomberg series) is licensed separately and is not included or redistributed in this repository.
+
 My underlying market series are **daily Bloomberg data (2000–2026)**, which I cannot redistribute under Bloomberg's licence terms. **No Bloomberg data is included in this repository.** So that the experiments can still be run end-to-end, the repo ships **mock datasets** — synthetic surrogates of the two processed datasets my headline results use:
 
 - `data/mock/taskb_spx_bbg_onset_trough_rp252_dd10_emb63_6f/` — single-market S&P 500 task, six crisis folds (≈8 MB)
 - `data/mock/panel_dd10_rp252/panel.parquet` — nine-market panel (≈11 MB)
 
-**What the mock data is** (generated by [`scripts/make_replication_dataset.py`](scripts/make_replication_dataset.py), fully seeded and deterministic): a surrogate produced from my licensed pull by heavy stochastic perturbation — every continuous feature column carries additive autocorrelated AR(1) noise (ρ = 0.9) with an unconditional standard deviation of **20% of that column's full-sample std**. The mock values do **not** correspond to any real market quote, cannot recover the original series, and must **never** be used as market data — they exist solely so that my pipeline, models, and evaluation protocol can be executed and inspected without a Bloomberg licence.
+**What the mock data is** (generated by [`scripts/make_replication_dataset.py`](scripts/make_replication_dataset.py), fully seeded and deterministic): a surrogate produced from my licensed pull by heavy stochastic perturbation — every continuous feature column carries additive autocorrelated AR(1) noise (ρ = 0.9) with an unconditional standard deviation of **20% of that column's full-sample std**. The features are perturbed with AR(1) noise at 20% of each column's standard deviation, while labels, dates and the forward-drawdown target are identical to the real task; the mock values therefore do **not** match any real market quote and must **never** be used as market data — they exist solely so that my pipeline, models, and evaluation protocol can be executed and inspected without a Bloomberg licence.
 
 Structural properties, so replication stays meaningful:
 
@@ -257,6 +288,6 @@ I **exclude entirely**: the raw Bloomberg pull (`data/shared/expanded/*.xlsx`), 
 
 ## Citation
 
-If you use my work, please cite my dissertation:
+If you use my work, please cite my dissertation (see also [`CITATION.cff`](CITATION.cff)):
 
 > Vulaş, H. S. (2026). *Dense Drawdown Supervision for Equity Crisis Early Warning: A Multi-Task Temporal Fusion Transformer and an Honest Test of Regime Awareness.* MSc Dissertation, King's College London.

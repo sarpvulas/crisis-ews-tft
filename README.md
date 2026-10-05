@@ -6,11 +6,11 @@
 > **My MSc Computational Finance dissertation, King's College London (2026)**
 > Hüseyin Sarp Vulaş · Supervisor: Dr Bart de Keijzer
 
-### Read the dissertation: [`docs/dissertation.pdf`](docs/dissertation.pdf)
+**Read the dissertation: [`docs/dissertation.pdf`](docs/dissertation.pdf)**
 
 ## TL;DR
 
-Stock-market crashes are rare, so models that try to warn of them have very few examples to learn from. I built a leak-free test of whether a Temporal Fusion Transformer can warn of an S&P 500 drawdown crisis starting within the next 63 trading days, and checked whether regime awareness (a hidden-Markov regime module with regime-conditioned attention) helps. Regime awareness made no measurable difference; what helped was adding an auxiliary head that predicts the forward drawdown every day, which gave the best-calibrated model I tested (lower Brier score in all six crisis folds) and a macro PR-AUC of 0.487 against 0.357 for the best tuned tree model.
+Stock-market crashes are rare, so models that try to warn of them have very few examples to learn from. I built a leak-free test of whether a Temporal Fusion Transformer can warn of an S&P 500 drawdown crisis starting within the next 63 trading days, and checked whether regime awareness (a hidden-Markov regime module with regime-conditioned attention) helps. Regime awareness made no measurable difference; what helped was adding an auxiliary head that predicts the forward drawdown every day, which gave a model better calibrated than the vanilla TFT (lower Brier score in all six crisis folds). Its macro PR-AUC of 0.487 beats the 0.357 of the best tuned tree model (that tree configuration was chosen on the test folds, so the comparison favours the tree), while its gain over the vanilla TFT (0.487 vs 0.459) is not statistically significant; the head ablation's +0.034 macro PR-AUC is (p = 0.031, CI [+0.013, +0.060]).
 
 ## Why this matters
 
@@ -30,7 +30,7 @@ This is my dissertation project: a leak-free study of deep learning for **equity
 **What I found (under a deliberately leak-free protocol):**
 
 - **Regime awareness is inert** — my fully regime-aware TFT is statistically indistinguishable from a vanilla TFT, and this holds across both the single-market and panel settings.
-- **What actually helps is a change to the *learning problem*, not the architecture:** I add a multi-task **auxiliary forward-drawdown head** that supervises the model on a signal defined *every* trading day, instead of only on the handful of sparse onset labels (my **"AF" recipe**). It is the **best-calibrated** model I tested (lower Brier in **all six** crisis folds; ECE 0.287 vs 0.319) and improves discrimination, concentrated in severe crises.
+- **What actually helps is a change to the *learning problem*, not the architecture:** I add a multi-task **auxiliary forward-drawdown head** that supervises the model on a signal defined *every* trading day, instead of only on the handful of sparse onset labels (my **"AF" recipe**). It is **better calibrated than the vanilla TFT** (lower Brier in **all six** crisis folds; ECE 0.287 vs 0.319) and improves discrimination, concentrated in severe crises.
 - **A three-way head ablation isolates the credit, and it lands on the auxiliary head alone.** Holding the objective fixed, adding the drawdown head gains `+0.034` macro PR-AUC and wins in **all six** crisis folds — episode-level Wilcoxon `p = 0.031` with a block-bootstrap CI of `[+0.013, +0.060]` that excludes zero, a stronger statement than the AF-vs-vanilla headline whose interval spans zero. The **focal loss is inert**: classification-only with focal sits `0.005` *below* the plain-BCE baseline (`p = 1.000`), so reading the recipe as "aux **and** focal" credits an ingredient that does no work. And the classification head **cannot** simply be swapped out — regression-only reaches `0.365` against a `0.336` prevalence baseline, below every configuration that keeps a classifier.
 - My deep models **beat *tuned* trees on the single-market task** (AF 0.487 vs best tuned tree 0.357 macro PR-AUC), and my capacity-matched recipe (**AFv2**) is **competitive with / marginally ahead of XGBoost on a 9-market panel** (0.385 vs 0.373 PR-AUC), which I confirm under a panel walk-forward.
 - My contribution is **methodological as much as architectural**: a reproducible, leak-free evaluation (embargoing, episode-level significance, calibration + usefulness analysis, tuned baselines) that separates a real, transferable improvement from a fashionable but unsupported one.
@@ -186,7 +186,7 @@ docker compose run --rm train \
   --results-dir results --checkpoint-dir checkpoints --device auto
 ```
 
-**Without Docker** (CPU only; tested on Python 3.11): install PyTorch from the CPU wheel index and the pinned dependencies, then call the same script directly. A 1-epoch run of the AF command on the mock data takes about 2 minutes on a laptop CPU (the 40-epoch command above takes proportionally longer):
+**Without Docker** (CPU only; tested on Python 3.11): install PyTorch from the CPU wheel index and the pinned dependencies, then call the same script directly. A 1-epoch run of the AF command on the mock data took about 2 minutes (1 min 56 s) on a laptop CPU (the 40-epoch command above takes proportionally longer):
 
 ```bash
 pip install "torch>=2.2,<3" --index-url https://download.pytorch.org/whl/cpu
@@ -273,7 +273,7 @@ My underlying market series are **daily Bloomberg data (2000–2026)**, which I 
 - `data/mock/taskb_spx_bbg_onset_trough_rp252_dd10_emb63_6f/` — single-market S&P 500 task, six crisis folds (≈8 MB)
 - `data/mock/panel_dd10_rp252/panel.parquet` — nine-market panel (≈11 MB)
 
-**What the mock data is** (generated by [`scripts/make_replication_dataset.py`](scripts/make_replication_dataset.py), fully seeded and deterministic): a surrogate produced from my licensed pull by heavy stochastic perturbation — every continuous feature column carries additive autocorrelated AR(1) noise (ρ = 0.9) with an unconditional standard deviation of **20% of that column's full-sample std**. The mock values do **not** correspond to any real market quote, cannot recover the original series, and must **never** be used as market data — they exist solely so that my pipeline, models, and evaluation protocol can be executed and inspected without a Bloomberg licence.
+**What the mock data is** (generated by [`scripts/make_replication_dataset.py`](scripts/make_replication_dataset.py), fully seeded and deterministic): a surrogate produced from my licensed pull by heavy stochastic perturbation — every continuous feature column carries additive autocorrelated AR(1) noise (ρ = 0.9) with an unconditional standard deviation of **20% of that column's full-sample std**. The features are perturbed with AR(1) noise at 20% of each column's standard deviation, while labels, dates and the forward-drawdown target are identical to the real task; the mock values therefore do **not** match any real market quote and must **never** be used as market data — they exist solely so that my pipeline, models, and evaluation protocol can be executed and inspected without a Bloomberg licence.
 
 Structural properties, so replication stays meaningful:
 

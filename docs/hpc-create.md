@@ -14,8 +14,8 @@ Account `kcl`, QoS `normal`, partitions available: `cpu`, `gpu`, `interruptible_
 
 | Path | Use for | Backed up? |
 |---|---|---|
-| `/users/k25119884` (`$HOME`) | Code, configs, small artifacts (~quota-limited) | ✅ yes |
-| `/scratch/users/k25119884` | Datasets, checkpoints, logs, wandb cache | ❌ no |
+| `/users/<k-number>` (`$HOME`) | Code, configs, small artifacts (~quota-limited) | ✅ yes |
+| `/scratch/users/<k-number>` | Datasets, checkpoints, logs, wandb cache | ❌ no |
 | `/rds/...` (group dir, if granted) | Final model artifacts, results worth keeping | ✅ yes |
 
 **Rule of thumb:** code + recipes in `$HOME`, everything bulky in `/scratch`, only finished outputs you'd cite in a thesis copy to `/rds`.
@@ -42,8 +42,8 @@ Excludes are deliberate: `data/` and `checkpoints/` belong on `/scratch`, not in
 ## Recommended layout on cluster
 
 ```
-/users/k25119884/ra-tft/             ← code (git working tree)
-/scratch/users/k25119884/ra-tft/
+/users/<k-number>/ra-tft/             ← code (git working tree)
+/scratch/users/<k-number>/ra-tft/
     data/                            ← raw + processed datasets (rebuild from FRED if lost)
     checkpoints/<run-name>/          ← per-run model snapshots
     logs/                            ← Slurm stdout/stderr
@@ -135,7 +135,7 @@ tail -f /scratch/users/$USER/ra-tft/logs/$(ls -t /scratch/users/$USER/ra-tft/log
 
 ```bash
 # From Mac, after training
-rsync -avz create:/scratch/users/k25119884/ra-tft/checkpoints/<run-name>/ \
+rsync -avz create:/scratch/users/<k-number>/ra-tft/checkpoints/<run-name>/ \
     ./checkpoints/<run-name>/
 ```
 

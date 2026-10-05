@@ -1,8 +1,10 @@
+> **Historical working notes from before the final experiments. Superseded by the dissertation (docs/dissertation.pdf); some statements here are outdated.**
+
 # TODO List
 
-## Blocked (needs RunPod credits)
+## Blocked (needed GPU credits)
 
-- [ ] **Recover RA-TFT X_combo checkpoints** — Pod `476d35ccdw2jq5` exited with 4/5 seeds mid-training. Run `scripts/recover_checkpoints.sh` after adding RunPod credits (~$1 needed). Saves seed 42 at epoch 79, others at 65-77.
+- [ ] **Recover RA-TFT X_combo checkpoints** — A cloud GPU pod exited with 4/5 seeds mid-training. Run `scripts/recover_checkpoints.sh` after adding GPU credits (~$1 needed). Saves seed 42 at epoch 79, others at 65-77.
 
 ## Architectural Improvements (next phase)
 
